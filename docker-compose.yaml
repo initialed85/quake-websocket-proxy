@@ -1,0 +1,31 @@
+services:
+    quake-server:
+        platform: linux/i386
+        restart: always
+        stop_grace_period: 0s
+        stdin_open: true
+        tty: true
+        build:
+            context: ../Quake-LinuxUpdate
+            dockerfile: ./Dockerfile
+        ports:
+            - 26000:26000/tcp
+            - 26000:26000/udp
+
+    websocket-proxy:
+        restart: always
+        stop_grace_period: 0s
+        build:
+            context: ./
+            dockerfile: ./Dockerfile
+        ports:
+            - 8081:8081/tcp
+
+    quake-wasm:
+        restart: always
+        stop_grace_period: 0s
+        build:
+            context: ../Quake-WASM
+            dockerfile: ./Dockerfile
+        ports:
+            - 8080:80/tcp
