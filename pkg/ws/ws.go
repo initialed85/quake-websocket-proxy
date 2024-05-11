@@ -16,12 +16,12 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	HandshakeTimeout: time.Second * 60,
+	HandshakeTimeout: time.Second * 10,
 	Subprotocols:     []string{"binary"},
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
-	EnableCompression: true,
+	EnableCompression: false,
 }
 
 var mu = new(sync.Mutex)
@@ -61,6 +61,7 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 
 			serverToClient := make(chan []byte, 1024)
 			clientToServer := make(chan []byte, 1024)
+			defer close(clientToServer)
 
 			go func() {
 				defer cancel()
@@ -97,6 +98,8 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 
 					switch messageType {
 					case websocket.BinaryMessage:
+						log.Printf("RECV %v <- %v\t%#+v", "    ", r.RemoteAddr, string(incomingMessage))
+
 						select {
 						case <-ctx.Done():
 							return
@@ -113,16 +116,27 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 			go func() {
 				defer cancel()
 
+				t := time.NewTicker(time.Second * 10)
+				defer t.Stop()
+
 				for {
 					select {
 					case <-ctx.Done():
 						return
+					case <-t.C:
+						err = wsConn.WriteMessage(websocket.PingMessage, []byte{})
+						if err != nil {
+							log.Printf("error: failed conn.WriteMessage() for [WebSocket ping] to %v: %v", r.RemoteAddr, err)
+							return
+						}
 					case outgoingMessage := <-serverToClient:
 						err = wsConn.WriteMessage(websocket.BinaryMessage, outgoingMessage)
 						if err != nil {
 							log.Printf("error: failed conn.WriteMessage() for %#+v to %v: %v", outgoingMessage, r.RemoteAddr, err)
 							return
 						}
+
+						log.Printf("SEND %v -> %v\t%#+v", "    ", r.RemoteAddr, string(outgoingMessage))
 					}
 				}
 			}()

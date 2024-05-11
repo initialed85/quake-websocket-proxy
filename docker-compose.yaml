@@ -11,6 +11,7 @@ services:
         ports:
             - 26000:26000/tcp
             - 26000:26000/udp
+            - 8082:8080/tcp
 
     websocket-proxy:
         restart: always

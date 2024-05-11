@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"time"
 )
 
 func RunClient(
@@ -20,6 +19,7 @@ func RunClient(
 	connectionID int64,
 ) error {
 	defer cancel()
+	defer close(serverToClient)
 
 	log := log.New(os.Stdout, fmt.Sprintf("%v\tUDP\t", connectionID), log.Flags()|log.Lmsgprefix)
 
@@ -71,7 +71,6 @@ func RunClient(
 			}
 
 			b := make([]byte, 65536)
-			udpConn.SetReadDeadline(time.Now().Add(time.Second * 10))
 			n, remoteSrcAddr, err := udpConn.ReadFrom(b)
 			if err != nil {
 				log.Printf("error: failed udpConn.ReadFrom() for %v: %v", dstAddr.String(), err)
@@ -79,7 +78,7 @@ func RunClient(
 			}
 			incomingMessage := b[:n]
 
-			log.Printf("RECV %v <- %v\t%#+v (%#+v)", mode, remoteSrcAddr.String(), incomingMessage, string(incomingMessage))
+			log.Printf("RECV %v <- %v\t%#+v", mode, remoteSrcAddr.String(), string(incomingMessage))
 
 			if mode == "CTRL" {
 				if len(incomingMessage) == 9 {
@@ -93,7 +92,7 @@ func RunClient(
 			}
 
 			select {
-			case <-time.After(time.Second * 10):
+			case <-ctx.Done():
 				return
 			case serverToClient <- incomingMessage:
 			}
@@ -107,18 +106,10 @@ func RunClient(
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Second * 10):
-				return
 			case outgoingMessage := <-clientToServer:
-				// if bytes.HasPrefix(outgoingMessage, []byte{0xff, 0xff, 0xff, 0xff}) {
-				// 	log.Printf("DROP %v -> %v\t%#+v (%#+v)", mode, dstAddr.String(), outgoingMessage, string(outgoingMessage))
-				// 	continue
-				// }
-
 				func() {
-					log.Printf("SEND %v -> %v\t%#+v (%#+v)", mode, dstAddr.String(), outgoingMessage, string(outgoingMessage))
+					log.Printf("SEND %v -> %v\t%#+v", mode, dstAddr.String(), string(outgoingMessage))
 
-					udpConn.SetWriteDeadline(time.Now().Add(time.Second * 10))
 					_, err = udpConn.WriteToUDP(outgoingMessage, dstAddr)
 					if err != nil {
 						log.Printf("error: failed udpConn.Write() for %#+v to %v: %v", outgoingMessage, dstAddr.String(), err)
