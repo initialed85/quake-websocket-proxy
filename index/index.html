@@ -1,0 +1,76 @@
+<html>
+    <head>
+        <title>Quake</title>
+    </head>
+    <style type="text/css">
+        body {
+            font-family: Tahoma;
+            font-size: 12pt;
+        }
+
+        label {
+            font-family: Tahoma;
+            font-size: 12pt;
+            font-weight: bold;
+        }
+
+        input {
+            font-family: Tahoma;
+            font-size: 12pt;
+        }
+    </style>
+    <script type="text/javascript">
+        const sanitizeName = (name) => {
+            return name.replace(/\W/g, "")
+        }
+
+        function getRandomArbitrary(min, max) {
+            return Math.random() * (max - min) + min
+        }
+
+        function getRandomInt(min, max) {
+            min = Math.ceil(min)
+            max = Math.floor(max)
+            return Math.floor(Math.random() * (max - min + 1)) + min
+        }
+
+        const handleOnLoad = () => {
+            const parts = (window.location.search || "").split("&")
+            const nameIndex = parts.findIndex((x) => x === "+name") + 1
+            let name = parts[nameIndex] || ""
+            name = name.length ? name : `player${getRandomInt(1000, 9999)}`
+            name = sanitizeName(name)
+            document.getElementById("name").value = name
+        }
+
+        const handleOnClick = () => {
+            let name = document.getElementById("name").value
+            name = sanitizeName(name)
+            window.open(`https://quake-play.initialed85.cc/?+connect&any&+name&${name}`)
+        }
+    </script>
+    <body onload="javascript: handleOnLoad();">
+        <h1>Join multiplayer Quake</h1>
+        <p>
+            <label>Name:</label>
+            <input type="text" value="" id="name" />
+            <input
+                type="button"
+                value="Connect"
+                onclick="javascript:handleOnClick();"
+            />
+        </p>
+        <p>
+            <a
+                target="_blank"
+                href="https://github.com/initialed85/quake-websocket-proxy"
+            >
+                Source code
+            </a>
+            -
+            <a target="_blank" href="https://quake-rcon.initialed85.cc">
+                RCON
+            </a>
+        </p>
+    </body>
+</html>
