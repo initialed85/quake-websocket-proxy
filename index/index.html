@@ -43,10 +43,20 @@
             document.getElementById("name").value = name
         }
 
-        const handleOnClick = () => {
+        const handleOnClickForSoftwareRendering = () => {
             let name = document.getElementById("name").value
             name = sanitizeName(name)
-            window.open(`https://quake-play.initialed85.cc/?+connect&any&+name&${name}`)
+            window.open(
+                `https://quake-play.initialed85.cc/?+connect&any&+name&${name}`,
+            )
+        }
+
+        const handleOnClickForOpenGL = () => {
+            let name = document.getElementById("name").value
+            name = sanitizeName(name)
+            window.open(
+                `https://quake-play-glquake.initialed85.cc/?+connect&any&+name&${name}`,
+            )
         }
     </script>
     <body onload="javascript: handleOnLoad();">
@@ -56,8 +66,13 @@
             <input type="text" value="" id="name" />
             <input
                 type="button"
-                value="Connect"
-                onclick="javascript:handleOnClick();"
+                value="Connect (Quake)"
+                onclick="javascript:handleOnClickForSoftwareRendering();"
+            />
+            <input
+                type="button"
+                value="Connect (GLQuake)"
+                onclick="javascript:handleOnClickForOpenGL();"
             />
         </p>
         <p>
