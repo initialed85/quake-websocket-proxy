@@ -11,10 +11,10 @@ COPY pkg /srv/pkg
 
 RUN go build -o quake-websocket-proxy ./cmd
 
-ENV WEBSOCKET_LISTEN_ADDRESS=0.0.0.0:8081
+ENV WEBSOCKET_LISTEN_ADDRESS=0.0.0.0:7071
 ENV QUAKE_SERVER_ADDRESS=quake-server:26000
 
-EXPOSE 8081
+EXPOSE 7071
 
 ENTRYPOINT ["./quake-websocket-proxy"]
 CMD []

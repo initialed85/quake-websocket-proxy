@@ -13,8 +13,8 @@ function teardown() {
 trap teardown exit
 pushd "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1
 
-sed -i.bak s%ws://localhost:8081/ws%wss://quake-play.initialed85.cc/ws%g ../Quake-WASM/WinQuake/net_websocket.c
-sed -i.bak s%ws://localhost:8081/ws%wss://quake-play.initialed85.cc/ws%g ../Quake-WASM/WinQuake/Makefile.emscripten
+sed -i.bak s%ws://localhost:7071/ws%wss://quake-play.initialed85.cc/ws%g ../Quake-WASM/WinQuake/net_websocket.c
+sed -i.bak s%ws://localhost:7071/ws%wss://quake-play.initialed85.cc/ws%g ../Quake-WASM/WinQuake/Makefile.emscripten
 
 cd ../Quake-WASM
 docker build --platform=linux/amd64 -t kube-registry:5000/quake-wasm:latest -f ./Dockerfile .

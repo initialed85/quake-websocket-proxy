@@ -21,7 +21,11 @@ func RunClient(
 	defer cancel()
 	defer close(serverToClient)
 
-	log := log.New(os.Stdout, fmt.Sprintf("%v\tUDP\t", connectionID), log.Flags()|log.Lmsgprefix)
+	log := log.New(
+		os.Stdout,
+		fmt.Sprintf("%v\tUDP\t", connectionID),
+		log.Flags()|log.Lmsgprefix|log.Lmicroseconds,
+	)
 
 	dstAddr := &net.UDPAddr{}
 	mode := "CTRL"
@@ -78,7 +82,8 @@ func RunClient(
 			}
 			incomingMessage := b[:n]
 
-			log.Printf("RECV %v <- %v\t%#+v", mode, remoteSrcAddr.String(), string(incomingMessage))
+			_ = remoteSrcAddr
+			// log.Printf("RECV %v <- %v\t%#+v", mode, remoteSrcAddr.String(), string(incomingMessage))
 
 			if mode == "CTRL" {
 				if len(incomingMessage) == 9 {
@@ -108,7 +113,7 @@ func RunClient(
 				return
 			case outgoingMessage := <-clientToServer:
 				func() {
-					log.Printf("SEND %v -> %v\t%#+v", mode, dstAddr.String(), string(outgoingMessage))
+					// log.Printf("SEND %v -> %v\t%#+v", mode, dstAddr.String(), string(outgoingMessage))
 
 					_, err = udpConn.WriteToUDP(outgoingMessage, dstAddr)
 					if err != nil {

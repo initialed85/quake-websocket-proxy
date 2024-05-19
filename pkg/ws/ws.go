@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -14,6 +15,14 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/initialed85/quake-websocket-proxy/pkg/udp"
 )
+
+const sysTicRateHz = 20
+const pingRate = time.Second * 1
+const pingWriteTimeout = time.Second * 1
+const readTimeout = time.Millisecond * (1000 / sysTicRateHz)
+const writeTimeout = time.Millisecond * (1000 / sysTicRateHz)
+const readTimeoutsPermitted = sysTicRateHz
+const writeTimeoutsPermitted = sysTicRateHz
 
 var upgrader = websocket.Upgrader{
 	HandshakeTimeout: time.Second * 10,
@@ -34,7 +43,11 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 		connectionID := lastConnectionID
 		mu.Unlock()
 
-		log := log.New(os.Stdout, fmt.Sprintf("%v\tWS\t", connectionID), log.Flags()|log.Lmsgprefix)
+		log := log.New(
+			os.Stdout,
+			fmt.Sprintf("%v\tWS\t", connectionID),
+			log.Flags()|log.Lmsgprefix|log.Lmicroseconds,
+		)
 
 		log.Printf("REQ  <- %v", r.RemoteAddr)
 
@@ -80,8 +93,12 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 			}()
 			runtime.Gosched()
 
+			applyTimeouts := false
+
 			go func() {
 				defer cancel()
+
+				readTimeouts := 0
 
 				for {
 					select {
@@ -90,15 +107,32 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 					default:
 					}
 
+					if applyTimeouts {
+						wsConn.SetReadDeadline(time.Now().Add(readTimeout))
+					}
+
 					messageType, incomingMessage, err := wsConn.ReadMessage()
 					if err != nil {
+						if applyTimeouts {
+							netErr, ok := err.(net.Error)
+							if ok && netErr.Timeout() {
+								readTimeouts++
+								if readTimeouts < readTimeoutsPermitted {
+									log.Printf("warning: failed conn.ReadMessage() for %v: %v", r.RemoteAddr, err)
+									continue
+								}
+							}
+						}
+
 						log.Printf("error: failed conn.ReadMessage() for %v: %v", r.RemoteAddr, err)
 						return
 					}
 
+					readTimeouts = 0
+
 					switch messageType {
 					case websocket.BinaryMessage:
-						log.Printf("RECV %v <- %v\t%#+v", "    ", r.RemoteAddr, string(incomingMessage))
+						// log.Printf("RECV %v <- %v\t%#+v", "    ", r.RemoteAddr, string(incomingMessage))
 
 						select {
 						case <-ctx.Done():
@@ -116,27 +150,60 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 			go func() {
 				defer cancel()
 
-				t := time.NewTicker(time.Second * 10)
+				t := time.NewTicker(pingRate)
 				defer t.Stop()
+
+				writeTimeouts := 0
 
 				for {
 					select {
 					case <-ctx.Done():
 						return
 					case <-t.C:
+						wsConn.SetWriteDeadline(time.Now().Add(pingWriteTimeout))
 						err = wsConn.WriteMessage(websocket.PingMessage, []byte{})
 						if err != nil {
 							log.Printf("error: failed conn.WriteMessage() for [WebSocket ping] to %v: %v", r.RemoteAddr, err)
 							return
 						}
 					case outgoingMessage := <-serverToClient:
+						if applyTimeouts {
+							wsConn.SetWriteDeadline(time.Now().Add(writeTimeout))
+						}
+
 						err = wsConn.WriteMessage(websocket.BinaryMessage, outgoingMessage)
 						if err != nil {
+							if applyTimeouts {
+								netErr, ok := err.(net.Error)
+								if ok && netErr.Timeout() {
+									writeTimeouts++
+									if writeTimeouts < writeTimeoutsPermitted {
+										log.Printf("warning: failed conn.WriteMessage() for %#+v to %v: %v", outgoingMessage, r.RemoteAddr, err)
+										continue
+									}
+								}
+							}
+
 							log.Printf("error: failed conn.WriteMessage() for %#+v to %v: %v", outgoingMessage, r.RemoteAddr, err)
 							return
 						}
 
-						log.Printf("SEND %v -> %v\t%#+v", "    ", r.RemoteAddr, string(outgoingMessage))
+						writeTimeouts = 0
+
+						if !applyTimeouts {
+							if len(outgoingMessage) == 9 {
+								if bytes.Equal(outgoingMessage[0:2], []byte{0x80, 0x00}) {
+									if outgoingMessage[4] == 0x81 {
+										go func() {
+											<-time.After(time.Second * 5)
+											applyTimeouts = true
+										}()
+									}
+								}
+							}
+						}
+
+						// log.Printf("SEND %v -> %v\t%#+v", "    ", r.RemoteAddr, string(outgoingMessage))
 					}
 				}
 			}()

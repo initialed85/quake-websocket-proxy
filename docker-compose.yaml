@@ -11,7 +11,7 @@ services:
         ports:
             - 26000:26000/tcp
             - 26000:26000/udp
-            - 8082:8080/tcp
+            - 7072:7072/tcp
 
     websocket-proxy:
         restart: always
@@ -20,7 +20,7 @@ services:
             context: ./
             dockerfile: ./Dockerfile
         ports:
-            - 8081:8081/tcp
+            - 7071:7071/tcp
 
     quake-wasm:
         restart: always
@@ -29,4 +29,4 @@ services:
             context: ../Quake-WASM
             dockerfile: ./Dockerfile
         ports:
-            - 8080:80/tcp
+            - 7070:80/tcp
