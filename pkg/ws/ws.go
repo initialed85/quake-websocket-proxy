@@ -21,8 +21,8 @@ const pingRate = time.Second * 1
 const pingWriteTimeout = time.Second * 1
 const readTimeout = time.Millisecond * (1000 / sysTicRateHz)
 const writeTimeout = time.Millisecond * (1000 / sysTicRateHz)
-const readTimeoutsPermitted = sysTicRateHz
-const writeTimeoutsPermitted = sysTicRateHz
+const readTimeoutsPermitted = sysTicRateHz * 10
+const writeTimeoutsPermitted = sysTicRateHz * 10
 
 var upgrader = websocket.Upgrader{
 	HandshakeTimeout: time.Second * 10,
@@ -35,8 +35,9 @@ var upgrader = websocket.Upgrader{
 
 var mu = new(sync.Mutex)
 var lastConnectionID int64
+var portByUUID = make(map[string]int)
 
-func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
+func getHandle(ctx context.Context, quakeServerAddr *net.UDPAddr) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		lastConnectionID++
@@ -56,6 +57,8 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 			log.Printf("error: failed upgrader.Upgrade for %v: %v", r.RemoteAddr, err)
 			return
 		}
+
+		ports := make(chan int, 1)
 
 		log.Printf("UPG  <- %v", r.RemoteAddr)
 
@@ -82,10 +85,14 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 				err := udp.RunClient(
 					ctx,
 					cancel,
-					os.Getenv("QUAKE_SERVER_ADDRESS"),
+					quakeServerAddr,
 					serverToClient,
 					clientToServer,
 					connectionID,
+					<-ports,
+					func(name string, colour1, colour2 int) {
+						// noop
+					},
 				)
 				if err != nil {
 					log.Printf("error: failed udp.RunClient for %v: %v", r.RemoteAddr, err)
@@ -118,7 +125,7 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 							if ok && netErr.Timeout() {
 								readTimeouts++
 								if readTimeouts < readTimeoutsPermitted {
-									log.Printf("warning: failed conn.ReadMessage() for %v: %v", r.RemoteAddr, err)
+									// log.Printf("warning: failed conn.ReadMessage() for %v: %v", r.RemoteAddr, err)
 									continue
 								}
 							}
@@ -132,7 +139,29 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 
 					switch messageType {
 					case websocket.BinaryMessage:
-						// log.Printf("RECV %v <- %v\t%#+v", "    ", r.RemoteAddr, string(incomingMessage))
+						// log.Printf("RECV %v <- %v\t%v\t%#+v", "    ", r.RemoteAddr, len(incomingMessage), string(incomingMessage))
+
+						if len(incomingMessage) > 6 {
+							if bytes.Equal(incomingMessage[0:6], []byte{62, 91, 27, 3, 20, 0}) {
+								uuid := string(incomingMessage[6:])
+
+								mu.Lock()
+								port, ok := portByUUID[uuid]
+								if !ok {
+									udpConn, _ := net.DialUDP("udp4", nil, quakeServerAddr)
+									udpAddr := udpConn.LocalAddr().(*net.UDPAddr)
+									port = udpAddr.Port
+									_ = udpConn.Close()
+									portByUUID[uuid] = port
+								}
+								mu.Unlock()
+
+								ports <- port
+
+								log.Printf("UUID %v -> %v\tport: %#+v, uuid: %#+v", "    ", quakeServerAddr.String(), port, uuid)
+								continue
+							}
+						}
 
 						select {
 						case <-ctx.Done():
@@ -178,7 +207,7 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 								if ok && netErr.Timeout() {
 									writeTimeouts++
 									if writeTimeouts < writeTimeoutsPermitted {
-										log.Printf("warning: failed conn.WriteMessage() for %#+v to %v: %v", outgoingMessage, r.RemoteAddr, err)
+										// log.Printf("warning: failed conn.WriteMessage() for %#+v to %v: %v", outgoingMessage, r.RemoteAddr, err)
 										continue
 									}
 								}
@@ -203,7 +232,7 @@ func getHandle(ctx context.Context) func(http.ResponseWriter, *http.Request) {
 							}
 						}
 
-						// log.Printf("SEND %v -> %v\t%#+v", "    ", r.RemoteAddr, string(outgoingMessage))
+						// log.Printf("SEND %v -> %v\t%v\t%#+v", "    ", r.RemoteAddr, len(outgoingMessage), string(outgoingMessage))
 					}
 				}
 			}()
@@ -219,7 +248,17 @@ func RunServer(
 	ctx context.Context,
 	listenAddr string,
 ) error {
-	http.HandleFunc("/ws", getHandle(ctx))
+	rawQuakeServerAddr := os.Getenv("QUAKE_SERVER_ADDRESS")
+	quakeServerAddr, err := net.ResolveUDPAddr("udp4", rawQuakeServerAddr)
+	if err != nil {
+		return err
+	}
+
+	if quakeServerAddr.IP == nil || quakeServerAddr.Port <= 0 {
+		return fmt.Errorf("%#+v parsed to invalid address %#+v", rawQuakeServerAddr, *quakeServerAddr)
+	}
+
+	http.HandleFunc("/ws", getHandle(ctx, quakeServerAddr))
 
 	localListenSrcAddr, err := net.ResolveTCPAddr("tcp4", listenAddr)
 	if err != nil {

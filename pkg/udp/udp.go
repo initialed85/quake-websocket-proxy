@@ -8,15 +8,20 @@ import (
 	"log"
 	"net"
 	"os"
+	"regexp"
+	"strconv"
+	"time"
 )
 
 func RunClient(
 	ctx context.Context,
 	cancel context.CancelFunc,
-	rawDstAddr string,
+	originalDstAddr *net.UDPAddr,
 	serverToClient chan []byte,
 	clientToServer chan []byte,
 	connectionID int64,
+	listenPort int,
+	handlePlayerInformation func(name string, colour1 int, colour2 int),
 ) error {
 	defer cancel()
 	defer close(serverToClient)
@@ -29,20 +34,9 @@ func RunClient(
 
 	dstAddr := &net.UDPAddr{}
 	mode := "CTRL"
-
 	defer func() {
 		log.Printf("DONE %v -> %v:%v", mode, dstAddr.IP.String(), dstAddr.Port)
 	}()
-
-	originalDstAddr, err := net.ResolveUDPAddr("udp4", rawDstAddr)
-	if err != nil {
-		return fmt.Errorf("failed to connect to control server: %v", err)
-	}
-
-	if originalDstAddr.IP == nil || originalDstAddr.Port <= 0 {
-		err = fmt.Errorf("%#+v parsed to invalid address %#+v", rawDstAddr, *originalDstAddr)
-		return fmt.Errorf("failed to connect to control server: %v", err)
-	}
 
 	dstAddr.IP = originalDstAddr.IP
 	dstAddr.Port = originalDstAddr.Port
@@ -50,17 +44,16 @@ func RunClient(
 
 	log.Printf("CONN %v -> %v:%v", mode, dstAddr.IP, dstAddr.Port)
 
-	udpConn, _ := net.DialUDP("udp4", nil, dstAddr)
-	localControlSrcAddr := udpConn.LocalAddr().(*net.UDPAddr)
-	_ = udpConn.Close()
-	localControlSrcAddr.Port = 0
-
-	udpConn, err = net.ListenUDP("udp4", localControlSrcAddr)
+	listenAddr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%v", listenPort))
+	udpConn, err := net.ListenUDP("udp4", listenAddr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to control server: %v", err)
 	}
 
 	defer func() {
+		_, _ = udpConn.WriteToUDP([]byte{0x02}, dstAddr)
+		udpConn.SetReadDeadline(time.Now().Add(time.Second * 1))
+		_, _, _ = udpConn.ReadFrom(make([]byte, 65536))
 		_ = udpConn.Close()
 	}()
 
@@ -83,7 +76,7 @@ func RunClient(
 			incomingMessage := b[:n]
 
 			_ = remoteSrcAddr
-			// log.Printf("RECV %v <- %v\t%#+v", mode, remoteSrcAddr.String(), string(incomingMessage))
+			log.Printf("RECV %v <- %v\t%v\t%#+v", mode, remoteSrcAddr.String(), len(incomingMessage), string(incomingMessage))
 
 			if mode == "CTRL" {
 				if len(incomingMessage) == 9 {
@@ -113,7 +106,21 @@ func RunClient(
 				return
 			case outgoingMessage := <-clientToServer:
 				func() {
-					// log.Printf("SEND %v -> %v\t%#+v", mode, dstAddr.String(), string(outgoingMessage))
+					log.Printf("SEND %v -> %v\t%v\t%#+v", mode, dstAddr.String(), len(outgoingMessage), string(outgoingMessage))
+
+					if bytes.Contains(outgoingMessage, []byte{0x04, 'n', 'a', 'm', 'e'}) &&
+						bytes.Contains(outgoingMessage, []byte{0x04, 'c', 'o', 'l', 'o', 'r'}) {
+						s := string(outgoingMessage)
+
+						name := regexp.MustCompile("\x04name \"(.*)\"\n").FindStringSubmatch(s)[1]
+						rawColor := regexp.MustCompile("\x04color (\\d+) (\\d+)\n").FindStringSubmatch(s)
+						colour1, _ := strconv.ParseInt(rawColor[1], 10, 64)
+						colour2, _ := strconv.ParseInt(rawColor[2], 10, 64)
+
+						log.Printf("JOIN %v -> %v\tname: %v, colour1: %v, colour2: %v", mode, dstAddr.String(), name, colour1, colour2)
+
+						handlePlayerInformation(name, int(colour1), int(colour2))
+					}
 
 					_, err = udpConn.WriteToUDP(outgoingMessage, dstAddr)
 					if err != nil {
