@@ -13,6 +13,16 @@ function teardown() {
 trap teardown exit
 pushd "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1
 
+cd ../
+
+if ! test -e Quake-WASM; then
+    git clone https://github.com/initialed85/Quake-WASM
+fi
+
+if ! test -e Quake-LinuxUpdate; then
+    git clone https://github.com/initialed85/Quake-LinuxUpdate
+fi
+
 sed -i.bak s%ws://localhost:7071/ws%wss://quake-play.initialed85.cc/ws%g ../Quake-WASM/WinQuake/net_websocket.c
 sed -i.bak s%ws://localhost:7071/ws%wss://quake-play.initialed85.cc/ws%g ../Quake-WASM/WinQuake/Makefile.emscripten
 
