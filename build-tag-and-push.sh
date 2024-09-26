@@ -23,6 +23,8 @@ if ! test -e Quake-LinuxUpdate; then
     git clone https://github.com/initialed85/Quake-LinuxUpdate
 fi
 
+cd ./quake-websocket-proxy
+
 sed -i.bak s%ws://localhost:7071/ws%wss://quake-play.initialed85.cc/ws%g ../Quake-WASM/WinQuake/net_websocket.c
 sed -i.bak s%ws://localhost:7071/ws%wss://quake-play.initialed85.cc/ws%g ../Quake-WASM/WinQuake/Makefile.emscripten
 
