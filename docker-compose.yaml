@@ -1,6 +1,6 @@
 services:
     quake-server:
-        platform: linux/i386
+        platform: linux/amd64
         restart: always
         stop_grace_period: 0s
         stdin_open: true

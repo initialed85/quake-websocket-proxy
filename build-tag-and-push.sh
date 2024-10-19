@@ -23,6 +23,8 @@ if ! test -e Quake-LinuxUpdate; then
     git clone https://github.com/initialed85/Quake-LinuxUpdate
 fi
 
+docker run --privileged --rm tonistiigi/binfmt --install all
+
 cd ./quake-websocket-proxy
 
 sed -i.bak s%ws://localhost:7071/ws%wss://quake-play.initialed85.cc/ws%g ../Quake-WASM/WinQuake/net_websocket.c
@@ -33,7 +35,7 @@ docker build --progress plain --platform=linux/amd64 -t kube-registry:5000/quake
 docker build --progress plain --build-arg GLQUAKE=1 --platform=linux/amd64 -t kube-registry:5000/quake-wasm:latest-glquake -f ./Dockerfile .
 
 cd ../Quake-LinuxUpdate
-docker build --progress plain --platform=linux/amd64 -t kube-registry:5000/quake-server:latest -f ./Dockerfile .
+docker build --progress plain --platform=linux/i386 -t kube-registry:5000/quake-server:latest -f ./Dockerfile .
 
 cd ../quake-websocket-proxy
 docker build --progress plain --platform=linux/amd64 -t kube-registry:5000/quake-websocket-proxy:latest -f ./Dockerfile .
