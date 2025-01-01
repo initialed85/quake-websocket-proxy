@@ -76,7 +76,7 @@ func RunClient(
 			incomingMessage := b[:n]
 
 			_ = remoteSrcAddr
-			log.Printf("RECV %v <- %v\t%v\t%#+v", mode, remoteSrcAddr.String(), len(incomingMessage), string(incomingMessage))
+			// log.Printf("RECV %v <- %v\t%v\t%#+v", mode, remoteSrcAddr.String(), len(incomingMessage), string(incomingMessage))
 
 			if mode == "CTRL" {
 				if len(incomingMessage) == 9 {
@@ -106,7 +106,7 @@ func RunClient(
 				return
 			case outgoingMessage := <-clientToServer:
 				func() {
-					log.Printf("SEND %v -> %v\t%v\t%#+v", mode, dstAddr.String(), len(outgoingMessage), string(outgoingMessage))
+					// log.Printf("SEND %v -> %v\t%v\t%#+v", mode, dstAddr.String(), len(outgoingMessage), string(outgoingMessage))
 
 					if bytes.Contains(outgoingMessage, []byte{0x04, 'n', 'a', 'm', 'e'}) &&
 						bytes.Contains(outgoingMessage, []byte{0x04, 'c', 'o', 'l', 'o', 'r'}) {

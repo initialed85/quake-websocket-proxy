@@ -12,6 +12,8 @@ services:
             - 26000:26000/tcp
             - 26000:26000/udp
             - 7072:7072/tcp
+        environment:
+          - "DISABLE_GOTTY=1"
 
     websocket-proxy:
         restart: always

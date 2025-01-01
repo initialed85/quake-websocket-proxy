@@ -125,7 +125,7 @@ func getHandle(ctx context.Context, quakeServerAddr *net.UDPAddr) func(http.Resp
 							if ok && netErr.Timeout() {
 								readTimeouts++
 								if readTimeouts < readTimeoutsPermitted {
-									// log.Printf("warning: failed conn.ReadMessage() for %v: %v", r.RemoteAddr, err)
+									log.Printf("warning: failed conn.ReadMessage() for %v: %v", r.RemoteAddr, err)
 									continue
 								}
 							}
@@ -207,7 +207,7 @@ func getHandle(ctx context.Context, quakeServerAddr *net.UDPAddr) func(http.Resp
 								if ok && netErr.Timeout() {
 									writeTimeouts++
 									if writeTimeouts < writeTimeoutsPermitted {
-										// log.Printf("warning: failed conn.WriteMessage() for %#+v to %v: %v", outgoingMessage, r.RemoteAddr, err)
+										log.Printf("warning: failed conn.WriteMessage() for %#+v to %v: %v", outgoingMessage, r.RemoteAddr, err)
 										continue
 									}
 								}
